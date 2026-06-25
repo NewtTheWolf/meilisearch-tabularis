@@ -1,0 +1,21 @@
+[package]
+name = "meilisearch-plugin"
+version = "0.1.0"
+edition = "2021"
+description = "Tabularis driver plugin for Meilisearch"
+license = "Apache-2.0"
+publish = false
+
+# Binary is named `meilisearch` (matches `.tabularium` executable), even though
+# the crate is `meilisearch-plugin`.
+[[bin]]
+name = "meilisearch"
+path = "src/main.rs"
+
+[dependencies]
+serde_json = "1"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = "symbols"

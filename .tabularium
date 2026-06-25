@@ -1,0 +1,69 @@
+{
+  "$schema": "https://registry.tabularis.dev/manifest.schema.json?kind=driver",
+  "name": "meilisearch",
+  "version": "0.1.0",
+  "description": "Meilisearch driver for Tabularis. Browse indexes as tables, infer schemas, edit documents, and run native typo-tolerant search with facets.",
+  "category": "integration",
+  "kind": "driver",
+  "engine": "meilisearch",
+  "paradigms": ["search", "document", "vector"],
+  "tags": ["meilisearch", "search", "full-text", "vector", "database-driver"],
+  "license": "Apache-2.0",
+  "icon": "assets/icon.svg",
+  "color": "#FF5CAA",
+  "homepage": "https://github.com/NewtTheWolf/meilisearch-tabularis",
+  "documentation_url": "https://github.com/NewtTheWolf/meilisearch-tabularis#readme",
+  "readme": "README.md",
+  "support": {
+    "issues_url": "https://github.com/NewtTheWolf/meilisearch-tabularis/issues"
+  },
+  "min_runtime_version": "0.9.20",
+  "default_port": 7700,
+  "default_username": "",
+  "executable": "meilisearch",
+  "is_builtin": false,
+  "capabilities": {
+    "schemas": false,
+    "views": false,
+    "routines": false,
+    "file_based": false,
+    "folder_based": false,
+    "no_connection_required": false,
+    "connection_string": false,
+    "identifier_quote": "\"",
+    "alter_primary_key": false,
+    "alter_column": false,
+    "create_foreign_keys": false,
+    "manage_tables": false,
+    "readonly": false,
+    "supports_ssl": true
+  },
+  "settings": [
+    {
+      "key": "sample_size",
+      "label": "Schema Inference Sample Size",
+      "type": "number",
+      "default": 20,
+      "description": "How many documents to sample per index when inferring columns."
+    },
+    {
+      "key": "schema_overrides_dir",
+      "label": "Schema Overrides Directory",
+      "type": "string",
+      "description": "Optional. Folder of per-index JSON files that override inferred columns (types, hidden/extra fields). Lookup: \"{host}_{index}.json\". Toggle the connection to reload."
+    }
+  ],
+  "data_types": [
+    { "name": "TEXT", "category": "string", "requires_length": false, "requires_precision": false },
+    { "name": "INTEGER", "category": "numeric", "requires_length": false, "requires_precision": false },
+    { "name": "DOUBLE", "category": "numeric", "requires_length": false, "requires_precision": false },
+    { "name": "BOOLEAN", "category": "other", "requires_length": false, "requires_precision": false },
+    { "name": "JSON", "category": "json", "requires_length": false, "requires_precision": false }
+  ],
+  "ui_extensions": [
+    {
+      "slot": "data-grid.toolbar.actions",
+      "module": "ui/dist/index.js"
+    }
+  ]
+}
