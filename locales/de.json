@@ -1,6 +1,7 @@
 {
   "toolbar.search": "Suchen",
   "toolbar.placeholder": "Diesen Index durchsuchen…",
-  "toolbar.clear": "Zurücksetzen",
-  "toolbar.empty": "Keine Dokumente gefunden."
+  "toolbar.empty": "Keine Dokumente gefunden.",
+  "toolbar.noIndex": "Öffne zuerst einen Index, dann suchen.",
+  "toolbar.resultsTitle": "Suchergebnisse — {index}"
 }

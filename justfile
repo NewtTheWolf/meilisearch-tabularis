@@ -62,6 +62,8 @@ dev-install: build
     mkdir -p ~/.local/share/tabularis/plugins/meilisearch
     cp target/debug/meilisearch ~/.local/share/tabularis/plugins/meilisearch/
     cp .tabularium ~/.local/share/tabularis/plugins/meilisearch/
+    @if [ -d locales ]; then cp -r locales ~/.local/share/tabularis/plugins/meilisearch/; fi
+    @if [ -d assets ]; then cp -r assets ~/.local/share/tabularis/plugins/meilisearch/; fi
     @if [ -f ui/dist/index.js ]; then \
         mkdir -p ~/.local/share/tabularis/plugins/meilisearch/ui/dist; \
         cp ui/dist/index.js ~/.local/share/tabularis/plugins/meilisearch/ui/dist/; \
@@ -74,6 +76,8 @@ dev-install: build
     mkdir -p "$HOME/Library/Application Support/tabularis/plugins/meilisearch"
     cp target/debug/meilisearch "$HOME/Library/Application Support/tabularis/plugins/meilisearch/"
     cp .tabularium "$HOME/Library/Application Support/tabularis/plugins/meilisearch/"
+    @if [ -d locales ]; then cp -r locales "$HOME/Library/Application Support/tabularis/plugins/meilisearch/"; fi
+    @if [ -d assets ]; then cp -r assets "$HOME/Library/Application Support/tabularis/plugins/meilisearch/"; fi
     @if [ -f ui/dist/index.js ]; then \
         mkdir -p "$HOME/Library/Application Support/tabularis/plugins/meilisearch/ui/dist"; \
         cp ui/dist/index.js "$HOME/Library/Application Support/tabularis/plugins/meilisearch/ui/dist/"; \
@@ -87,6 +91,8 @@ dev-install: build
     New-Item -ItemType Directory -Force -Path $dest | Out-Null
     Copy-Item "target\debug\meilisearch.exe" $dest
     Copy-Item ".tabularium" $dest
+    if (Test-Path "locales") { Copy-Item -Recurse -Force "locales" $dest }
+    if (Test-Path "assets") { Copy-Item -Recurse -Force "assets" $dest }
     if (Test-Path "ui\dist\index.js") {
         New-Item -ItemType Directory -Force -Path (Join-Path $dest "ui\dist") | Out-Null
         Copy-Item "ui\dist\index.js" (Join-Path $dest "ui\dist")

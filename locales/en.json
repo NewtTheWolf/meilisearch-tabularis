@@ -1,6 +1,7 @@
 {
   "toolbar.search": "Search",
   "toolbar.placeholder": "Search this index…",
-  "toolbar.clear": "Clear",
-  "toolbar.empty": "No documents matched."
+  "toolbar.empty": "No documents matched.",
+  "toolbar.noIndex": "Open an index first, then search.",
+  "toolbar.resultsTitle": "Search results — {index}"
 }
