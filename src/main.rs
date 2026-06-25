@@ -9,6 +9,7 @@
 use std::io::{self, BufRead, Write};
 
 mod client;
+mod config;
 mod error;
 mod handlers;
 mod models;
