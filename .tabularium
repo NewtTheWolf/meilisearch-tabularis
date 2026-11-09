@@ -2,14 +2,23 @@
   "$schema": "https://registry.tabularis.dev/manifest.schema.json?kind=driver",
   "name": "meilisearch",
   "version": "0.1.0",
-  "description": "Meilisearch driver for Tabularis. Browse indexes as tables, infer schemas, edit documents, and run native typo-tolerant search with facets.",
-  "category": "integration",
+  "description": "Browse Meilisearch indexes, edit documents and run native typo-tolerant searches with filters, and sorting in Tabularis.",
+  "category": "search",
   "kind": "driver",
   "engine": "meilisearch",
-  "paradigms": ["search", "document", "vector"],
-  "tags": ["meilisearch", "search", "full-text", "vector", "database-driver"],
+  "paradigms": [
+    "search",
+    "document"
+  ],
+  "tags": [
+    "meilisearch",
+    "search",
+    "full-text",
+    "vector",
+    "database-driver"
+  ],
   "license": "Apache-2.0",
-  "icon": "assets/icon.svg",
+  "icon": "https://raw.githubusercontent.com/NewtTheWolf/meilisearch-tabularis/v0.1.0/assets/icon.svg",
   "color": "#FF5CAA",
   "homepage": "https://github.com/NewtTheWolf/meilisearch-tabularis",
   "documentation_url": "https://github.com/NewtTheWolf/meilisearch-tabularis#readme",
@@ -17,7 +26,7 @@
   "support": {
     "issues_url": "https://github.com/NewtTheWolf/meilisearch-tabularis/issues"
   },
-  "min_runtime_version": "0.9.20",
+  "min_runtime_version": "0.32.0",
   "default_port": 7700,
   "default_username": "",
   "executable": "meilisearch",
@@ -28,6 +37,7 @@
     "routines": false,
     "file_based": false,
     "folder_based": false,
+    "single_database": true,
     "no_connection_required": false,
     "connection_string": false,
     "identifier_quote": "\"",
@@ -36,7 +46,11 @@
     "create_foreign_keys": false,
     "manage_tables": false,
     "readonly": false,
-    "supports_ssl": true
+    "supports_ssl": true,
+    "table_export": false,
+    "table_import": false,
+    "explain": false,
+    "sql_dialect": "generic"
   },
   "settings": [
     {
@@ -45,25 +59,59 @@
       "type": "number",
       "default": 20,
       "description": "How many documents to sample per index when inferring columns."
-    },
-    {
-      "key": "schema_overrides_dir",
-      "label": "Schema Overrides Directory",
-      "type": "string",
-      "description": "Optional. Folder of per-index JSON files that override inferred columns (types, hidden/extra fields). Lookup: \"{host}_{index}.json\". Toggle the connection to reload."
     }
   ],
   "data_types": [
-    { "name": "TEXT", "category": "string", "requires_length": false, "requires_precision": false },
-    { "name": "INTEGER", "category": "numeric", "requires_length": false, "requires_precision": false },
-    { "name": "DOUBLE", "category": "numeric", "requires_length": false, "requires_precision": false },
-    { "name": "BOOLEAN", "category": "other", "requires_length": false, "requires_precision": false },
-    { "name": "JSON", "category": "json", "requires_length": false, "requires_precision": false }
-  ],
-  "ui_extensions": [
     {
-      "slot": "data-grid.toolbar.actions",
-      "module": "ui/dist/index.js"
+      "name": "TEXT",
+      "category": "string",
+      "requires_length": false,
+      "requires_precision": false
+    },
+    {
+      "name": "INTEGER",
+      "category": "numeric",
+      "requires_length": false,
+      "requires_precision": false
+    },
+    {
+      "name": "DOUBLE",
+      "category": "numeric",
+      "requires_length": false,
+      "requires_precision": false
+    },
+    {
+      "name": "BOOLEAN",
+      "category": "other",
+      "requires_length": false,
+      "requires_precision": false
+    },
+    {
+      "name": "JSON",
+      "category": "json",
+      "requires_length": false,
+      "requires_precision": false
+    }
+  ],
+  "connection_fields": {
+    "username": {
+      "hidden": true
+    },
+    "password": {
+      "label": "API key",
+      "placeholder": "Meilisearch API key"
+    }
+  },
+  "screenshots": [
+    {
+      "url": "screenshots/browse.png",
+      "caption": "Actual Tabularis desktop: a local Meilisearch index containing synthetic movie documents.",
+      "alt": "Meilisearch documents in the native Tabularis data grid"
+    },
+    {
+      "url": "screenshots/search.png",
+      "caption": "Actual Tabularis desktop: native typo-tolerant search against synthetic local data.",
+      "alt": "Native Meilisearch search query and matching movie results"
     }
   ]
 }

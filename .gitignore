@@ -4,3 +4,7 @@ dist/
 ui/node_modules/
 ui/dist/
 .DS_Store
+
+/default.tabularium
+/SHA256SUMS
+*.zip.new

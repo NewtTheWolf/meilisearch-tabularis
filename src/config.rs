@@ -31,7 +31,7 @@ pub fn sample_size() -> usize {
         .and_then(|v| v.get("sample_size"))
         .and_then(Value::as_u64)
         .filter(|n| *n > 0)
-        .map(|n| n as usize)
+        .map(|n| n.min(1000) as usize)
         .unwrap_or(DEFAULT_SAMPLE_SIZE)
 }
 

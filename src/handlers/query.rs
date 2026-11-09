@@ -3,12 +3,10 @@
 //! Meilisearch has no SQL. `execute_query` serves two callers:
 //!   - the grid *browsing* a table — `SELECT * FROM "index"` → page documents;
 //!   - the search toolbar UI extension — a `@meili-search:{json}` sentinel
-//!     (routed here via `usePluginQuery`) → a real Meilisearch search.
+//!     entered in the normal query editor for a native Meilisearch search.
 //!
-//! Both return the same `{ columns, rows, total_count, execution_time_ms }`
+//! Both return the host QueryResult and pagination
 //! shape the host grid expects.
-
-use std::time::Instant;
 
 use serde_json::{json, Value};
 
@@ -43,7 +41,11 @@ fn health(params: &Value) -> Result<(), (i64, String)> {
 
 pub fn execute_query(id: Value, params: &Value) -> Value {
     let conn = ConnectionParams::from_value(inner_params(params));
-    let query = params.get("query").and_then(Value::as_str).unwrap_or("");
+    let query = params
+        .get("query")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .trim();
 
     let client = match Client::from_params(&conn) {
         Ok(c) => c,
@@ -56,19 +58,28 @@ pub fn execute_query(id: Value, params: &Value) -> Value {
     }
 
     // Otherwise: browse documents in the index named by the SELECT.
-    let page = params.get("page").and_then(Value::as_u64).unwrap_or(1);
+    let page = params
+        .get("page")
+        .and_then(Value::as_u64)
+        .unwrap_or(1)
+        .max(1);
     let page_size = params
-        .get("page_size")
+        .get("limit")
+        .filter(|v| !v.is_null())
+        .or_else(|| params.get("page_size"))
         .and_then(Value::as_u64)
         .unwrap_or(100);
 
+    if !(1..=1000).contains(&page_size) {
+        return error_response(id, -32602, "Page size must be between 1 and 1000");
+    }
     let index = match sql::table_from_query(query) {
         Some(i) => i,
         None => {
             return error_response(
                 id,
                 -32602,
-                "could not determine the index to browse from the query",
+                "Only SELECT * FROM index is supported for browsing. Use @meili-search:{\"index\":\"movies\",\"q\":\"text\"} for native search, filters, facets and sorting.",
             )
         }
     };
@@ -76,12 +87,10 @@ pub fn execute_query(id: Value, params: &Value) -> Value {
     let off = pagination::offset(page, page_size);
     let path = format!("/indexes/{index}/documents?offset={off}&limit={page_size}");
 
-    let started = Instant::now();
     let resp = match client.get(&path) {
         Ok(v) => v,
         Err(e) => return error_response(id, e.code, &e.message),
     };
-    let elapsed_ms = started.elapsed().as_millis() as u64;
 
     let docs = resp
         .get("results")
@@ -93,7 +102,7 @@ pub fn execute_query(id: Value, params: &Value) -> Value {
         .and_then(Value::as_u64)
         .unwrap_or(docs.len() as u64);
 
-    ok_response(id, result_payload(docs, total, elapsed_ms))
+    ok_response(id, result_payload(docs, total, page, page_size, off))
 }
 
 fn run_search(id: Value, client: &Client, spec: &str) -> Value {
@@ -102,26 +111,28 @@ fn run_search(id: Value, client: &Client, spec: &str) -> Value {
         Err(e) => return error_response(id, -32602, &format!("invalid search spec: {e}")),
     };
     let index = match spec.get("index").and_then(Value::as_str) {
-        Some(i) if !i.is_empty() => i,
+        Some(i) if sql::valid_identifier(i) => i,
         _ => return error_response(id, -32602, "search spec missing 'index'"),
     };
-    let q = spec.get("q").and_then(Value::as_str).unwrap_or("");
+    if !spec.is_object() {
+        return error_response(id, -32602, "Search spec must be an object");
+    }
     let limit = spec.get("limit").and_then(Value::as_u64).unwrap_or(20);
     let offset = spec.get("offset").and_then(Value::as_u64).unwrap_or(0);
 
-    let body = json!({
-        "q": q,
-        "limit": limit,
-        "offset": offset,
-        "showRankingScore": true,
-    });
+    if !(1..=1000).contains(&limit) {
+        return error_response(id, -32602, "Search limit must be between 1 and 1000");
+    }
+    let mut body = spec.as_object().cloned().unwrap_or_default();
+    body.remove("index");
+    body.insert("limit".into(), json!(limit));
+    body.insert("offset".into(), json!(offset));
+    let body = Value::Object(body);
 
-    let started = Instant::now();
     let resp = match client.post(&format!("/indexes/{index}/search"), &body) {
         Ok(v) => v,
         Err(e) => return error_response(id, e.code, &e.message),
     };
-    let elapsed_ms = started.elapsed().as_millis() as u64;
 
     let hits = resp
         .get("hits")
@@ -133,12 +144,14 @@ fn run_search(id: Value, client: &Client, spec: &str) -> Value {
         .and_then(Value::as_u64)
         .unwrap_or(hits.len() as u64);
 
-    ok_response(id, result_payload(hits, total, elapsed_ms))
+    let page = offset.checked_div(limit).map(|p| p + 1).unwrap_or(1);
+    ok_response(id, result_payload(hits, total, page, limit, offset))
 }
 
-/// Turn a list of documents into the grid payload: union of keys as columns,
-/// each row aligned to those columns (missing keys → null).
-fn result_payload(docs: Vec<Value>, total: u64, elapsed_ms: u64) -> Value {
+/// Turn a list of documents into the host `QueryResult` shape: union of keys as
+/// columns, each row aligned to those columns (missing keys → null), plus the
+/// pagination block the grid needs. `affected_rows` is 0 — these are reads.
+fn result_payload(docs: Vec<Value>, total: u64, page: u64, page_size: u64, offset: u64) -> Value {
     let columns = schema::union_columns(&docs);
     let rows: Vec<Value> = docs
         .iter()
@@ -152,11 +165,19 @@ fn result_payload(docs: Vec<Value>, total: u64, elapsed_ms: u64) -> Value {
         })
         .collect();
 
+    let has_more = !rows.is_empty() && offset.saturating_add(rows.len() as u64) < total;
+
     json!({
         "columns": columns,
         "rows": rows,
-        "total_count": total,
-        "execution_time_ms": elapsed_ms,
+        "affected_rows": 0,
+        "truncated": false,
+        "pagination": {
+            "page": page,
+            "page_size": page_size,
+            "total_rows": total,
+            "has_more": has_more,
+        },
     })
 }
 

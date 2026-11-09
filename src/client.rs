@@ -66,9 +66,37 @@ impl Client {
         send(self.auth(self.agent.delete(&self.url(path))).call())
     }
 
+    /// Wait for an accepted write to finish, surfacing indexing failures.
+    pub fn wait_task(&self, accepted: Value) -> Result<(), PluginError> {
+        let uid = accepted
+            .get("taskUid")
+            .and_then(Value::as_u64)
+            .ok_or_else(|| PluginError::internal("Write response has no taskUid"))?;
+        let deadline = std::time::Instant::now() + Duration::from_secs(15);
+        loop {
+            let task = self.get(&format!("/tasks/{uid}"))?;
+            match task.get("status").and_then(Value::as_str) {
+                Some("succeeded") => return Ok(()),
+                Some("failed" | "canceled") => {
+                    return Err(PluginError::internal(format!(
+                        "Meilisearch task {uid}: {}",
+                        task.get("error").unwrap_or(&Value::Null)
+                    )))
+                }
+                Some("enqueued" | "processing") => {}
+                _ => return Err(PluginError::internal("Invalid task status")),
+            }
+            if std::time::Instant::now() >= deadline {
+                return Err(PluginError::internal(format!("Meilisearch task {uid} is still pending; inspect its status before retrying the write")));
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+    }
+
     /// `GET /health` — cheap connectivity probe for `test_connection`/`ping`.
     pub fn health(&self) -> Result<(), PluginError> {
-        self.get("/health").map(|_| ())
+        self.get("/health")?;
+        self.get("/indexes?limit=1").map(|_| ())
     }
 }
 

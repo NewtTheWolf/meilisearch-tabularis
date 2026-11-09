@@ -66,22 +66,26 @@ pub fn get_columns(id: Value, params: &Value) -> Value {
     };
 
     // Primary key drives is_primary_key (and lets the host do update/delete).
-    let primary_key = client
-        .get(&format!("/indexes/{table}"))
-        .ok()
-        .and_then(|info| {
-            info.get("primaryKey")
-                .and_then(Value::as_str)
-                .map(str::to_string)
-        });
-
-    // Sample documents to infer the column set + types.
+    if !crate::utils::sql::valid_identifier(table) {
+        return error_response(id, -32602, "Invalid index name");
+    }
+    let metadata = match client.get(&format!("/indexes/{table}")) {
+        Ok(v) => v,
+        Err(e) => return error_response(id, e.code, &e.message),
+    };
+    let primary_key = metadata
+        .get("primaryKey")
+        .and_then(Value::as_str)
+        .map(str::to_string);
     let sample_size = config::sample_size();
-    let docs: Vec<Value> = client
-        .get(&format!("/indexes/{table}/documents?limit={sample_size}"))
-        .ok()
-        .and_then(|v| v.get("results").and_then(Value::as_array).cloned())
-        .unwrap_or_default();
+    let docs = match client.get(&format!("/indexes/{table}/documents?limit={sample_size}")) {
+        Ok(v) => v
+            .get("results")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default(),
+        Err(e) => return error_response(id, e.code, &e.message),
+    };
 
     let mut columns = schema::union_columns(&docs);
 
@@ -117,8 +121,8 @@ pub fn get_columns(id: Value, params: &Value) -> Value {
                 "name": name,
                 "data_type": schema::infer_column_type(&docs, name),
                 "is_nullable": !is_pk,
-                "column_default": Value::Null,
-                "is_primary_key": is_pk,
+                "default_value": Value::Null,
+                "is_pk": is_pk,
                 "is_auto_increment": false,
                 "comment": Value::Null,
             })

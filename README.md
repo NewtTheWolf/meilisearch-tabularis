@@ -1,67 +1,102 @@
-# Meilisearch — Tabularis Plugin
+# Meilisearch for Tabularis
 
-Driver plugin for [Tabularis](https://github.com/TabularisDB/tabularis).
-Generated with `@tabularis/create-plugin`.
+A native JSON-RPC driver for Meilisearch: browse indexes as tables, infer columns,
+edit documents and run typo-tolerant searches in the ordinary Tabularis editor.
 
-## Getting started
+## Install and connect
 
-```bash
-just dev-install       # build + install into ~/.local/share/tabularis/plugins/meilisearch
+Install the archive from [Releases](https://github.com/NewtTheWolf/meilisearch-tabularis/releases)
+through Tabularis's plugin installer. This release targets Tabularis **0.32.0+**.
+The Linux x64 archive is verified locally; other platforms need their own verification.
+
+Choose **Add Connection > Meilisearch**. Enter the host and port (default `7700`)
+and your API key in the password field. Leave the key empty only for an unsecured
+local development instance. The connection test checks a protected endpoint as
+well as health, so an invalid key fails before connecting.
+
+Enable TLS for remote HTTPS services. TLS certificates use the system trust store;
+custom CA files and client certificates are not implemented by this driver.
+
+## Browse and search
+
+Double-click an index in the Explorer to browse its documents. Host pagination
+uses `limit` and `page`, with at most 1,000 documents per request. Columns come
+from a bounded sample; nested objects and arrays remain JSON values. An empty
+index with an explicit primary key still exposes that key.
+
+The grid's simple `SELECT * FROM "movies"` browse query is supported. Meilisearch
+is not a SQL database: SQL filters, sorting, joins, DDL and SQL import/export are
+not supported. Unsupported SQL returns an error instead of silently ignoring clauses.
+Use a native search request in the normal query editor:
+
+```text
+@meili-search:{"index":"movies","q":"matrx","limit":20}
 ```
 
-Then open Tabularis — your driver appears in the connection picker. `test_connection` is stubbed to return success so you can immediately see the plugin wired up.
+For native filters and sorting, configure the corresponding Meilisearch index
+attributes first, then use:
 
-## What's implemented
-
-| Method | Status | Notes |
-|--------|--------|-------|
-| `test_connection` | placeholder | returns `{success: true}` unconditionally — replace with a real check before shipping |
-| `ping` | minimal | returns `null`; falls back to `test_connection` if missing |
-| `get_databases`, `get_schemas`, `get_tables`, `get_columns`, `get_indexes`, `get_foreign_keys` | stubs | return `[]` — fill these in to populate the sidebar |
-| `get_views*`, `get_routines*`, `create_view`, `alter_view`, `drop_view` | `-32601` | not implemented — flip `capabilities.views` / `capabilities.routines` once you wire these |
-| `execute_query`, `explain_query` | `-32601` | implement first if you want query execution in the UI |
-| `insert_record`, `update_record`, `delete_record` | `-32601` | implement for row editing support |
-| DDL generators, batch methods | `-32601` | implement as you light up the matching UI features |
-
-## Layout
-
-```
-src/
-├── main.rs            thin stdio loop
-├── rpc.rs             method dispatch + response helpers
-├── error.rs           plugin error type
-├── models.rs          ConnectionParams + common shapes
-├── client.rs          connection config (stub — implement your driver here)
-├── handlers/
-│   ├── metadata.rs    databases, schemas, tables, columns, indexes, FKs, views, routines
-│   ├── query.rs       test_connection, ping, execute_query, explain_query
-│   ├── crud.rs        insert_record, update_record, delete_record
-│   └── ddl.rs         CREATE/ALTER/DROP generators
-├── utils/
-│   ├── identifiers.rs quote_identifier(name) + tests
-│   └── pagination.rs  paginate(query, page, size) + tests
-└── bin/
-    └── test_plugin.rs local REPL for simulating Tabularis calls
+```text
+@meili-search:{"index":"movies","q":"","filter":"year = 2024","sort":["year:desc"],"limit":20,"offset":0}
 ```
 
-## Testing without Tabularis
+Additional native search options are forwarded to Meilisearch for validation.
+The result grid displays hits, not the API's separate facet distribution or timing
+metadata. Search totals are Meilisearch estimates and respect its configured
+maximum searchable result window. Browse ordering follows Meilisearch document order.
 
-```bash
-just repl
-# > get_tables
-# { "tables": [] }
+The old optional toolbar source under `ui/` is not shipped. Its SQL-only
+`usePluginQuery` route cannot execute native Meilisearch requests in the current
+Tabularis sandbox. No sandbox restrictions are bypassed; native queries use the
+normal editor and the executable driver's protocol.
+
+## Document writes
+
+Insert, single-cell update and delete use Tabularis's `pk_map` contract and wait
+for the asynchronous Meilisearch task to succeed. Task failure is returned as an
+error. If a task times out, inspect its status before retrying: the write may still
+complete later. Your API key needs document read/write, index read and task read
+permissions for these operations.
+
+Create indexes with an explicit primary key before inserting. Primary-key edits,
+composite keys and updates/deletes without a key are rejected. Updates preserve
+unmodified fields. Insert checks for an existing document before submitting a
+replacement operation; Meilisearch does not provide atomic SQL INSERT semantics,
+so concurrent external writers can still race that check. There are no SQL transactions.
+
+The schema inference sample size is configurable (default 20, maximum 1,000).
+Index discovery currently lists the first 1,000 indexes. Schema overrides, index
+creation/deletion, index settings administration and vector-specific UI are not
+implemented or advertised by this release.
+
+## Local verification
+
+```sh
+docker run --rm --name tabularis-meili-e2e -p 127.0.0.1:17700:7700 \
+  -e MEILI_MASTER_KEY=tabularis-meili-local-demo-key \
+  -e MEILI_NO_ANALYTICS=true getmeili/meilisearch:v1.56.2
+# In another terminal:
+cargo test --locked
+cargo clippy --all-targets -- -D warnings
+cargo build --release --locked
+python3 tests/seed.py
+python3 tests/live.py
 ```
 
-## Publishing
+The seed script resets only `movies` and `empty_index` on the configured test
+instance and loads 205 synthetic movie documents. Never point it at production.
+Override `MEILI_TEST_URL` and `MEILI_TEST_KEY` for a dedicated test service.
+`MEILI_TEST_BINARY` selects an extracted release binary for archive verification.
 
-Tag a commit `v0.1.0` and push — the included GitHub Actions workflow builds for Linux (x64/arm64), macOS (x64/arm64), and Windows (x64), then attaches the zipped plugin bundles to the release. Submit a PR to `plugins/registry.json` in the Tabularis repo to publish to the in-app registry.
+See [TESTING.md](TESTING.md) for the native desktop and release verification record.
 
-## References
+## Screenshots
 
-- [Plugin guide](https://github.com/TabularisDB/tabularis/blob/main/plugins/PLUGIN_GUIDE.md)
-- [Manifest schema](https://github.com/TabularisDB/tabularis/blob/main/plugins/manifest.schema.json)
-- [Tabularis repo](https://github.com/TabularisDB/tabularis)
+Actual Tabularis desktop captures with local synthetic data, no production credentials.
+
+![Index browser](screenshots/browse.png)
+![Native search results](screenshots/search.png)
 
 ## License
 
-Apache-2.0
+Apache-2.0. See [LICENSE](LICENSE).

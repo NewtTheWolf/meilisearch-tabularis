@@ -1,0 +1,25 @@
+name: Verify plugin
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      meilisearch:
+        image: getmeili/meilisearch:v1.56.2
+        ports: ['17700:7700']
+        env:
+          MEILI_MASTER_KEY: tabularis-meili-local-demo-key
+          MEILI_NO_ANALYTICS: 'true'
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test --locked
+      - run: cargo build --release --locked
+      - run: python3 tests/seed.py
+      - run: python3 tests/live.py

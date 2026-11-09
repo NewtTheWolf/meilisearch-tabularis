@@ -1,84 +1,58 @@
-//! Minimal SQL parsing.
-//!
-//! Meilisearch has no SQL, but the Tabularis grid still issues
-//! `SELECT * FROM "index"` when browsing a "table". We only need the index
-//! name out of that — real querying goes through the search UI, not here.
+//! Only the host's simple browse SELECT is supported. Never silently ignore SQL clauses.
 
-/// Extract the first identifier following `FROM`. Handles `"x"`, `` `x` ``,
-/// `[x]`, and bare identifiers. Returns `None` if there is no `FROM` clause.
+pub fn valid_identifier(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 512
+        && value
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+}
+
 pub fn table_from_query(query: &str) -> Option<String> {
-    let lower = query.to_lowercase();
-    let from = lower.find(" from ")?;
-    let rest = query[from + 6..].trim_start();
-
-    let mut chars = rest.chars().peekable();
-    let closing = match chars.peek() {
-        Some('"') => {
-            chars.next();
-            Some('"')
-        }
-        Some('`') => {
-            chars.next();
-            Some('`')
-        }
-        Some('[') => {
-            chars.next();
-            Some(']')
-        }
-        _ => None,
-    };
-
-    let mut ident = String::new();
-    for c in chars {
-        match closing {
-            Some(q) if c == q => break,
-            None if c.is_whitespace() || c == ';' || c == '(' || c == ',' => break,
-            _ => ident.push(c),
-        }
+    let words: Vec<_> = query
+        .trim()
+        .trim_end_matches(';')
+        .split_whitespace()
+        .collect();
+    if words.len() != 4
+        || !words[0].eq_ignore_ascii_case("select")
+        || words[1] != "*"
+        || !words[2].eq_ignore_ascii_case("from")
+    {
+        return None;
     }
-
-    let ident = ident.trim();
-    if ident.is_empty() {
-        None
-    } else {
-        Some(ident.to_string())
-    }
+    let name = words[3];
+    let name = name
+        .strip_prefix('"')
+        .and_then(|s| s.strip_suffix('"'))
+        .or_else(|| name.strip_prefix('`').and_then(|s| s.strip_suffix('`')))
+        .or_else(|| name.strip_prefix('[').and_then(|s| s.strip_suffix(']')))
+        .unwrap_or(name);
+    valid_identifier(name).then(|| name.to_string())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::table_from_query;
-
+    use super::*;
     #[test]
-    fn extracts_quoted_identifier() {
-        assert_eq!(
-            table_from_query("SELECT * FROM \"movies\""),
-            Some("movies".to_string())
-        );
-    }
-
-    #[test]
-    fn extracts_bare_identifier() {
-        assert_eq!(
-            table_from_query("select * from books where x = 1"),
-            Some("books".to_string())
-        );
-    }
-
-    #[test]
-    fn handles_backticks_and_brackets() {
-        assert_eq!(
-            table_from_query("SELECT * FROM `idx`"),
-            Some("idx".to_string())
-        );
-        assert_eq!(
-            table_from_query("SELECT * FROM [idx]"),
-            Some("idx".to_string())
-        );
-    }
-
-    #[test]
-    fn none_without_from() {
-        assert_eq!(table_from_query("SHOW INDEXES"), None);
+    fn browse_only_never_discards_filters_or_writes() {
+        for query in [
+            "SELECT * FROM movies",
+            "SELECT * FROM \"movies\";",
+            "select * from `books`",
+            "select * from [books]",
+        ] {
+            assert!(table_from_query(query).is_some(), "{query}");
+        }
+        for query in [
+            "DELETE FROM movies",
+            "SELECT * FROM movies WHERE id = 1",
+            "SELECT title FROM movies",
+            "SELECT * FROM movies ORDER BY id",
+            "SELECT * FROM movies; DELETE FROM movies",
+            "SELECT * FROM ../keys",
+        ] {
+            assert!(table_from_query(query).is_none(), "{query}");
+        }
     }
 }
