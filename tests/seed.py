@@ -21,7 +21,9 @@ def wait(task):
  raise TimeoutError()
 # Only reset the two explicitly named disposable demo indexes.
 for name in ['movies','empty_index']:
- try: wait(api('/indexes/'+name,method='DELETE'))
+ try:
+  api('/indexes/'+name)
+  wait(api('/indexes/'+name,method='DELETE'))
  except urllib.error.HTTPError as e:
   if e.code != 404: raise
 wait(api('/indexes',{'uid':'movies','primaryKey':'id'}))

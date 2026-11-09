@@ -42,6 +42,10 @@ The user's saved connections were not changed. Through the actual desktop UI:
 `screenshots/browse.png` and `screenshots/search.png` are unmodified captures of
 that real app window with synthetic data.
 
+The seed and all eight live checks also passed against a second, completely fresh
+container. The initial CI failure for deleting an absent index was a fixture bug:
+the seeder now checks index existence before enqueueing deletion.
+
 ## Findings and limits
 
 The first test host used a different compiled frontend and produced an empty
