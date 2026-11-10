@@ -1,120 +1,111 @@
-name: Release
+name: Native packages
 
 on:
-  push:
-    tags:
-      - "v*"
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Existing v-prefixed tag to verify and publish; leave empty for build-only'
+        required: false
+        type: string
+
+permissions:
+  contents: read
 
 jobs:
   build:
-    name: ${{ matrix.platform-label }}
+    name: ${{ matrix.platform }}
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
         include:
-          - platform-label: linux-x64
-            runner: ubuntu-latest
+          - platform: linux-x64
+            runner: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
-            archive: zip
-            binary-suffix: ""
-          - platform-label: linux-arm64
-            runner: ubuntu-latest
+            meili_asset: meilisearch-linux-amd64
+            suffix: ''
+          - platform: linux-arm64
+            runner: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
-            archive: zip
-            binary-suffix: ""
-            cross: true
-          - platform-label: darwin-x64
-            runner: macos-latest
+            meili_asset: meilisearch-linux-aarch64
+            suffix: ''
+          - platform: darwin-x64
+            runner: macos-15-intel
             target: x86_64-apple-darwin
-            archive: zip
-            binary-suffix: ""
-          - platform-label: darwin-arm64
-            runner: macos-14
+            meili_asset: meilisearch-macos-amd64
+            suffix: ''
+          - platform: darwin-arm64
+            runner: macos-15
             target: aarch64-apple-darwin
-            archive: zip
-            binary-suffix: ""
-          - platform-label: win-x64
-            runner: windows-latest
+            meili_asset: meilisearch-macos-amd64
+            suffix: ''
+          - platform: win-x64
+            runner: windows-2022
             target: x86_64-pc-windows-msvc
-            archive: zip
-            binary-suffix: ".exe"
-
+            meili_asset: meilisearch-windows-amd64.exe
+            suffix: '.exe'
     steps:
       - uses: actions/checkout@v5
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        with:
+          ref: ${{ inputs.release_tag || github.ref }}
+      - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
-
-      - name: Install cross (linux-arm64 only)
-        if: matrix.cross
-        run: cargo install cross --locked
-
-      - name: Build (cross)
-        if: matrix.cross
-        run: cross build --release --locked --target ${{ matrix.target }}
-
-      - name: Build
-        if: ${{ !matrix.cross }}
-        run: cargo build --release --locked --target ${{ matrix.target }}
-
-      - name: Package (unix)
-        if: runner.os != 'Windows'
-        run: |
-          STAGE=staging
-          mkdir -p "$STAGE"
-          cp target/${{ matrix.target }}/release/meilisearch${{ matrix.binary-suffix }} "$STAGE/"
-          cp .tabularium README.md TESTING.md LICENSE "$STAGE/"
-          cp -r screenshots "$STAGE/"
-          if [ -d assets ]; then
-            cp -r assets "$STAGE/"
-          fi
-          (cd "$STAGE" && zip -r ../meilisearch-${{ matrix.platform-label }}.zip .)
-
-      - name: Package (windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $stage = "staging"
-          New-Item -ItemType Directory -Force -Path $stage | Out-Null
-          Copy-Item "target\${{ matrix.target }}\release\meilisearch${{ matrix.binary-suffix }}" $stage
-          Copy-Item ".tabularium", "README.md", "TESTING.md", "LICENSE" $stage
-          Copy-Item -Recurse "screenshots" $stage
-          if (Test-Path "assets") {
-            Copy-Item -Recurse "assets" "$stage\assets"
-          }
-          Compress-Archive -Path "$stage\*" -DestinationPath "meilisearch-${{ matrix.platform-label }}.zip"
-
-      - name: Stash artifact
-        uses: actions/upload-artifact@v5
+      - uses: actions/setup-python@v6
         with:
-          name: meilisearch-${{ matrix.platform-label }}
-          path: meilisearch-${{ matrix.platform-label }}.zip
-          retention-days: 1
+          python-version: '3.12'
+      - name: Unit tests on native target
+        run: cargo test --locked --target ${{ matrix.target }}
+      - name: Native release build
+        run: cargo build --release --locked --target ${{ matrix.target }}
+      - name: Download the pinned Meilisearch test server
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download v1.56.2 --repo meilisearch/meilisearch --pattern '${{ matrix.meili_asset }}' --dir .ci-meili
+      - name: Enable the x64 test server on Apple Silicon
+        if: matrix.platform == 'darwin-arm64'
+        shell: bash
+        run: |
+          if ! arch -x86_64 /usr/bin/true; then
+            sudo softwareupdate --install-rosetta --agree-to-license
+          fi
+      - name: Package for this native platform
+        run: python3 scripts/package.py --platform '${{ matrix.platform }}' --binary 'target/${{ matrix.target }}/release/meilisearch${{ matrix.suffix }}'
+      - name: Live tests of built binary and extracted archive
+        run: python3 scripts/native_verify.py --server '.ci-meili/${{ matrix.meili_asset }}' --binary 'target/${{ matrix.target }}/release/meilisearch${{ matrix.suffix }}' --archive 'meilisearch-${{ matrix.platform }}.zip'
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: meilisearch-${{ matrix.platform }}
+          path: |
+            meilisearch-${{ matrix.platform }}.zip
+            .ci-meili/*-verification.json
+            .ci-meili/*-server.log
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 14
 
-  release:
-    name: Publish GitHub release
+  publish:
+    name: Publish verified packages
+    if: github.event_name == 'workflow_dispatch' && inputs.release_tag != ''
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
-      - name: Checkout (for the .tabularium manifest asset)
-        uses: actions/checkout@v5
-
-      - name: Download all build artifacts
-        uses: actions/download-artifact@v5
+      - uses: actions/checkout@v5
         with:
+          ref: ${{ inputs.release_tag }}
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: meilisearch-*
           path: artifacts
           merge-multiple: true
-
-      - name: Publish release
-        uses: softprops/action-gh-release@v2
-        with:
-          # .tabularium ships as a standalone asset: the registry resolves the
-          # manifest from release assets, not the git ref.
-          files: |
-            artifacts/*.zip
-            .tabularium
+      - name: Publish immutable verified assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          python3 scripts/publish_verified.py --artifacts artifacts --tag "$RELEASE_TAG"

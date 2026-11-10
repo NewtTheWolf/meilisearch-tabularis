@@ -7,7 +7,9 @@ edit documents and run typo-tolerant searches in the ordinary Tabularis editor.
 
 Install the archive from [Releases](https://github.com/NewtTheWolf/meilisearch-tabularis/releases)
 through Tabularis's plugin installer. This release targets Tabularis **0.32.0+**.
-The Linux x64 archive requires glibc 2.34+ and is verified locally; other platforms need their own verification.
+Packages are provided for Windows x64, macOS Intel and Apple Silicon, and Linux
+x64/ARM64. Each archive is verified on its matching native runner before publication.
+Linux x64 requires glibc 2.34+. Desktop GUI E2E coverage is currently Linux x64 only.
 
 Choose **Add Connection > Meilisearch**. Enter the host and port (default `7700`)
 and your API key in the password field. Leave the key empty only for an unsecured

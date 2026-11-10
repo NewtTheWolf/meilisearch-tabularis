@@ -8,3 +8,6 @@ ui/dist/
 /default.tabularium
 /SHA256SUMS
 *.zip.new
+
+.ci-meili/
+__pycache__/

@@ -57,7 +57,21 @@ WebDriver-generated editor input produced Monaco clipboard `NotAllowedError`
 and canceled async-operation messages. These did not prevent the verified queries
 or persisted CRUD actions. No claim is made that the complete host console is warning-free.
 
-macOS, Windows, Linux ARM, custom TLS/CA environments, vector UI and production
-clusters were not tested. The published local archive is Linux x64 only. The
-old search toolbar is not shipped. See README for the supported query subset,
-index/sample limits and non-transactional write behavior.
+## Native platform release gate
+
+The Native packages workflow builds and runs unit tests on Windows x64,
+macOS Intel, macOS Apple Silicon, Linux x64 and Linux ARM64. Each job starts
+Meilisearch v1.56.2 in a disposable directory, seeds 205 demo documents and runs
+the eight live JSON-RPC tests against both the built executable and the extracted
+ZIP. A machine-readable per-platform verification report records the archive
+hash, host architecture and both live-test passes. Publication checks every
+report and hash; failed or canceled jobs cannot publish a partial release.
+
+The Apple Silicon driver is ARM64-native. The upstream macOS Meilisearch test
+server is x64 and runs through Rosetta on that runner. This does not emulate the
+driver. Native platform builds and stdio/HTTP live tests are distinct from a
+Tabularis desktop GUI E2E run, which remains verified on Linux x64 only.
+
+Custom TLS/CA environments, vector UI and production clusters are not tested.
+The historical search toolbar remains excluded. See README for query/sample
+limits and non-transactional write behavior.
