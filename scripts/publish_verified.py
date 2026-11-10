@@ -15,6 +15,7 @@ if args.tag != 'v' + version:
     raise SystemExit('Tag and manifest version differ')
 platforms = ['linux-x64', 'linux-arm64', 'darwin-x64', 'darwin-arm64', 'win-x64']
 files = []
+reports = []
 for label in platforms:
     archive = args.artifacts / f'meilisearch-{label}.zip'
     report_file = args.artifacts / '.ci-meili' / f'{label}-verification.json'
@@ -32,7 +33,8 @@ for label in platforms:
         raise SystemExit(f'Incomplete live tests for {label}')
     if hashlib.sha256(archive.read_bytes()).hexdigest() != report['sha256']:
         raise SystemExit(f'Archive hash mismatch for {label}')
-    files.extend([archive, report_file])
+    files.append(archive)
+    reports.append(report)
 standalone = Path('default.tabularium')
 standalone.write_bytes(manifest.read_bytes())
 files.append(standalone)
@@ -41,5 +43,6 @@ checksums.write_text(''.join(hashlib.sha256(p.read_bytes()).hexdigest() + '  ' +
 files.append(checksums)
 notes = ('Native builds and unit tests passed on all five matching runners. Each built binary and extracted ZIP passed eight live JSON-RPC tests against Meilisearch v1.56.2. '
          'The Apple Silicon driver runs natively; the local x64 Meilisearch test server uses Rosetta. '
-         'Desktop GUI E2E was verified on Linux only. See TESTING.md and the attached platform reports for evidence and limits.')
+         'Desktop GUI E2E was verified on Linux only. See TESTING.md and the verification records below for evidence and limits.')
+notes += '\n\n## Native verification records\n\n```json\n' + json.dumps(reports, indent=2) + '\n```\n'
 subprocess.run(['gh', 'release', 'create', args.tag, '--verify-tag', '--title', 'Meilisearch ' + version + ' native platform packages', '--notes', notes, *map(str, files)], check=True)
