@@ -5,12 +5,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 BASE = os.environ.get('MEILI_TEST_URL', 'http://127.0.0.1:17700')
 KEY = os.environ.get('MEILI_TEST_KEY', 'tabularis-meili-local-demo-key')
-BINARY = os.environ.get('MEILI_TEST_BINARY', str(ROOT / 'target/release/meilisearch'))
+BINARY = os.environ.get('MEILI_TEST_BINARY', str(ROOT / 'target/release' / ('meilisearch.exe' if os.name == 'nt' else 'meilisearch')))
 
 class Live(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.proc = subprocess.Popen([BINARY], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+        cls.proc = subprocess.Popen([BINARY], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, encoding="utf-8")
         from urllib.parse import urlparse
         u = urlparse(BASE)
         cls.conn = {'host':u.hostname,'port':u.port or 7700,'password':KEY,'ssl_mode':'disable'}

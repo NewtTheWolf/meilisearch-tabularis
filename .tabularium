@@ -1,7 +1,7 @@
 {
   "$schema": "https://registry.tabularis.dev/manifest.schema.json?kind=driver",
   "name": "meilisearch",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Browse Meilisearch indexes, edit documents and run native typo-tolerant searches with filters and sorting in Tabularis.",
   "category": "search",
   "kind": "driver",
@@ -17,7 +17,7 @@
     "database-driver"
   ],
   "license": "Apache-2.0",
-  "icon": "https://raw.githubusercontent.com/NewtTheWolf/meilisearch-tabularis/v0.1.1/assets/icon.svg",
+  "icon": "https://raw.githubusercontent.com/NewtTheWolf/meilisearch-tabularis/v0.1.2/assets/icon.svg",
   "color": "#FF5CAA",
   "homepage": "https://github.com/NewtTheWolf/meilisearch-tabularis",
   "documentation_url": "https://github.com/NewtTheWolf/meilisearch-tabularis#readme",
